@@ -1,8 +1,7 @@
 #[derive(Clone, Copy, PartialEq)]
 pub enum Cell {
     Empty,
-    Food,
-    Body,
+    //Body,
 
     Mouth,
     Producer,

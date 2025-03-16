@@ -34,20 +34,65 @@ impl Grid {
         ] = true;
     }
 
+    pub fn is_cell_empty(&self, x: usize, y: usize) -> bool {
+        if x >= WIDTH || y >= HEIGHT {
+            return false;
+        }
+    
+        if self.organs[y][x] != Cell::Empty {
+            return false;
+        }
+    
+        if self.foods[y][x] {
+            return false;
+        }
+    
+        true
+    }
+
+    pub fn make_remains(&mut self, organism: &Organism) {
+        for (dx, dy, _) in organism.cells.iter() {
+            let x = organism.x as i32 + dx;
+            let y = organism.y as i32 + dy;
+            if x < 0 || y < 0 || x >= WIDTH as i32 || y >= HEIGHT as i32 {
+                continue;
+            }
+            let x = x as usize;
+            let y = y as usize;
+            self.foods[y][x] = true;
+        }
+    }
+
+    pub fn check_spawn(&self, organism: &Organism) -> bool {
+        for (dx, dy, _) in organism.cells.iter() {
+            let x = organism.x as i32 + dx;
+            let y = organism.y as i32 + dy;
+            if x < 0 || y < 0 {
+                return false;
+            }
+            let x = x as usize;
+            let y = y as usize;
+            if !self.is_cell_empty(x, y) || x >= WIDTH || y >= HEIGHT {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn mouth_eat(&mut self, x: usize, y: usize) -> bool {
         if self.foods[y][x] {
             self.foods[y][x] = false;
             return true;
-        } else if self.foods[y][x + 1] {
+        } else if x + 1 < WIDTH && self.foods[y][x + 1] {
             self.foods[y][x + 1] = false;
             return true;
-        } else if self.foods[y][x - 1] {
+        } else if x > 0 && self.foods[y][x - 1] {
             self.foods[y][x - 1] = false;
             return true;
-        } else if self.foods[y + 1][x] {
+        } else if y + 1 < HEIGHT && self.foods[y + 1][x] {
             self.foods[y + 1][x] = false;
             return true;
-        } else if self.foods[y - 1][x] {
+        } else if y > 0 && self.foods[y - 1][x] {
             self.foods[y - 1][x] = false;
             return true;
         }
@@ -76,8 +121,7 @@ impl Grid {
                 let mut color;
                 color = match self.organs[y][x] {
                     Cell::Empty => DARKGRAY,
-                    Cell::Food => BLUE,
-                    Cell::Body => WHITE,
+                    //Cell::Body => WHITE,
 
                     Cell::Mouth => ORANGE,
                     Cell::Producer => GREEN,

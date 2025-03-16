@@ -23,14 +23,26 @@ async fn main() {
 
     let mut organisms: Vec<Organism> = Vec::new(); 
 
-    organisms.push(Organism::new(50, 50, vec![(0, 0, cell::Cell::Mover), (0, 1, cell::Cell::Mouth), (1, 0, cell::Cell::Producer)]));
+    organisms.push(Organism::new(50, 50, vec![(0, 0, cell::Cell::Mover), (1, 0, cell::Cell::Mouth), (-1, 0, cell::Cell::Producer)]));
 
     loop {
         clear_background(BLACK);
         grid.draw_organisms(&mut organisms);
+        
+        organisms.retain_mut(|organism| organism.update(&mut grid));
+
+        let mut new_organisms = Vec::new();
         for organism in organisms.iter_mut() {
-            organism.update(&mut grid);
+            if organism.can_reproduce() {
+                let mut new_org = organism.child();
+                new_org.random_offset();
+                if grid.check_spawn(&new_org) {
+                    new_organisms.push(new_org);
+                    organism.consume_reproduction_energy();
+                }
+            }
         }
+        organisms.extend(new_organisms);
 
         next_frame().await;
     }
