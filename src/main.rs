@@ -1,10 +1,10 @@
 mod cell;
 mod grid;
 mod organism;
+mod utils;
 
 use grid::Grid;
 use organism::Organism;
-use std::collections::LinkedList;
 use macroquad::prelude::*;
 
 fn window_conf() -> Conf {
@@ -21,13 +21,16 @@ fn window_conf() -> Conf {
 async fn main() {
     let mut grid = Grid::new();
 
-    let mut organisms: LinkedList<Organism> = LinkedList::new(); 
+    let mut organisms: Vec<Organism> = Vec::new(); 
 
-    grid.draw_organisms(organisms);
+    organisms.push(Organism::new(50, 50, vec![(0, 0, cell::Cell::Mover), (0, 1, cell::Cell::Mouth), (1, 0, cell::Cell::Producer)]));
 
     loop {
         clear_background(BLACK);
-        grid.draw();
+        grid.draw_organisms(&mut organisms);
+        for organism in organisms.iter_mut() {
+            organism.update(&mut grid);
+        }
 
         next_frame().await;
     }

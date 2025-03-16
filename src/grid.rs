@@ -1,44 +1,93 @@
 use crate::organism::Organism;
 
 use crate::cell::Cell;
-use std::collections::LinkedList;
 use macroquad::prelude::*;
 use ::rand::prelude::*;
 
-const WIDTH: usize = 100;
-const HEIGHT: usize = 100;
-const CELL_SIZE: f32 = 7.0;
+use crate::utils::*;//{WIDTH, HEIGHT, CELL_SIZE, PRODUCER_RATE}; 
+
 
 pub struct Grid {
-    pub cells: [[Cell; WIDTH]; HEIGHT],
+    pub rng: ThreadRng,
+    pub foods: [[bool; WIDTH]; HEIGHT],
+    pub organs: [[Cell; WIDTH]; HEIGHT],
 }
 
 impl Grid {
     pub fn new() -> Self {
-        let mut grid = Grid {
-            cells: [[Cell::Empty; WIDTH]; HEIGHT],
-        };
-        grid
+        Grid {
+            rng: thread_rng(),
+            foods: [[false; WIDTH]; HEIGHT],
+            organs: [[Cell::Empty; WIDTH]; HEIGHT],
+        }
+    }
+
+    pub fn produce_food(&mut self, x: usize, y: usize) {
+        if self.rng.gen::<f32>() > PRODUCER_RATE {
+            return;
+        }
+
+        self.foods[
+            ((if self.rng.gen_bool(0.5) { 1 } else { -1 }) as i32 + y as i32).clamp(0, (HEIGHT - 1) as i32) as usize
+        ][
+            ((if self.rng.gen_bool(0.5) { 1 } else { -1 }) as i32 + x as i32).clamp(0, (WIDTH - 1) as i32) as usize
+        ] = true;
+    }
+
+    pub fn mouth_eat(&mut self, x: usize, y: usize) -> bool {
+        if self.foods[y][x] {
+            self.foods[y][x] = false;
+            return true;
+        } else if self.foods[y][x + 1] {
+            self.foods[y][x + 1] = false;
+            return true;
+        } else if self.foods[y][x - 1] {
+            self.foods[y][x - 1] = false;
+            return true;
+        } else if self.foods[y + 1][x] {
+            self.foods[y + 1][x] = false;
+            return true;
+        } else if self.foods[y - 1][x] {
+            self.foods[y - 1][x] = false;
+            return true;
+        }
+        false
     }
 
     pub fn screen_size() -> (i32, i32) {
         ((WIDTH as f32 * CELL_SIZE) as i32, (HEIGHT as f32 * CELL_SIZE) as i32)
     }
 
-    pub fn draw_organisms(&mut self, organisms: &mut LinkedList<Organism>) {
+    pub fn draw_organisms(&mut self, organisms: &mut Vec<Organism>) {
+        self.organs = [[Cell::Empty; WIDTH]; HEIGHT];
         for organism in organisms.iter() {
-            self.cells[organism.y][organism.x] = Cell::Organism;
+            for cell in organism.cells.iter() {
+                let x = (organism.x as i32 + cell.0) as usize;
+                let y = (organism.y as i32 + cell.1) as usize;
+                self.organs[y][x] = cell.2;
+            }
         }
+        self.draw();
     }
 
     pub fn draw(&self) {
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
-                let color = match self.cells[y][x] {
+                let mut color;
+                color = match self.organs[y][x] {
                     Cell::Empty => DARKGRAY,
-                    Cell::Food => GREEN,
-                    Cell::Organism => RED,
+                    Cell::Food => BLUE,
+                    Cell::Body => WHITE,
+
+                    Cell::Mouth => ORANGE,
+                    Cell::Producer => GREEN,
+                    Cell::Mover => LIGHTGRAY,
+                    Cell::Killer => RED,
+                    Cell::Armor => YELLOW,
+                    Cell::Eye => PURPLE,
+                    Cell::Brain => PINK,
                 };
+                if self.foods[y][x] {color = BLUE;}
                 draw_rectangle(x as f32 * CELL_SIZE, y as f32 * CELL_SIZE, CELL_SIZE, CELL_SIZE, color);
             }
         }

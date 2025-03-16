@@ -2,5 +2,13 @@
 pub enum Cell {
     Empty,
     Food,
-    Organism,
+    Body,
+
+    Mouth,
+    Producer,
+    Mover,
+    Killer,
+    Armor,
+    Eye,
+    Brain,
 }
