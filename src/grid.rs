@@ -1,11 +1,17 @@
+use crate::cell::EyeType;
 use crate::organism::Organism;
 
-use crate::cell::Cell;
+use crate::{Direction, cell::Cell};
 use macroquad::prelude::*;
 use ::rand::prelude::*;
 
 use crate::utils::*;//{WIDTH, HEIGHT, CELL_SIZE, PRODUCER_RATE}; 
 
+enum CellContent {
+    Empty,
+    Food,
+    Organism,
+}
 
 pub struct Grid {
     pub rng: ThreadRng,
@@ -57,11 +63,22 @@ impl Grid {
             return false;
         }
     
-        if self.foods[y][x] {
-            return false;
+        true
+    }
+    fn cell_contents(&self, x: usize, y: usize) -> CellContent {
+        if x >= WIDTH || y >= HEIGHT {
+            return CellContent::Empty;
         }
     
-        true
+        if self.organs[y][x] != Cell::Empty {
+            return CellContent::Organism;
+        }
+    
+        if self.foods[y][x] {
+            return CellContent::Food;
+        }
+    
+        CellContent::Empty
     }
 
     pub fn make_remains(&mut self, organism: &Organism) {
@@ -80,6 +97,52 @@ impl Grid {
     pub fn killer_activates(&mut self, x: usize, y: usize, id: usize) {
         self.pending_kill_coordinates.push((x, y));
         self.pending_kill_killers.push(id);
+    }
+
+    pub fn get_eye_data(&self, x: usize, y: usize, dir: Direction) -> f32 {
+        fn increment_pos(x: usize, y:usize, dir: Direction) -> (usize, usize) {
+            match dir {
+                Direction::Up => (x, y - 1),
+                Direction::Down => (x, y + 1),
+                Direction::Left => (x - 1, y),
+                Direction::Right => (x + 1, y),
+                _ => (x, y),
+            }
+        }
+        
+        let mut data = 0.1;
+
+        let mut depth = 0;
+
+        let mut cx = x;
+        let mut cy = y;
+
+        loop {
+            if cx == 0 || cy == 0 || cx >= WIDTH || cy >= HEIGHT {
+                break;
+            }
+
+            (cx, cy) = increment_pos(cx, cy, dir);
+
+            match self.cell_contents(cx, cy) {
+                CellContent::Food => {
+                    data = 0.5;
+                    break;
+                }
+                CellContent::Organism => {
+                    data = -1.0;
+                    break;
+                }
+                _ => {}
+            }
+
+            depth+=1;
+            if depth >= MAX_EYE_DIST {
+                break;
+            }
+        }
+
+        data
     }
 
     pub fn check_spawn(&self, organism: &Organism) -> bool {
@@ -162,21 +225,29 @@ impl Grid {
     pub fn draw(&self) {
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
-                let mut color;
-                color = match self.organs[y][x] {
-                    Cell::Empty => DARKGRAY,
-                    //Cell::Body => WHITE,
+                let mut extra_rect: Direction = Direction::None;
+                
+                let color = match self.organs[y][x] {
+                    Cell::Empty => {if self.foods[y][x] {BLUE} else {DARKGRAY}},
+                    Cell::Body => WHITE,
 
                     Cell::Mouth => ORANGE,
                     Cell::Producer => GREEN,
                     Cell::Mover => LIGHTGRAY,
                     Cell::Killer => RED,
                     Cell::Armor => YELLOW,
-                    Cell::Eye => PURPLE,
+                    Cell::Eye(eye_dir) => {
+                        extra_rect = eye_dir.to_direction();
+                        PURPLE},
                     Cell::Brain => PINK,
                 };
-                if self.foods[y][x] {color = BLUE;}
+
                 draw_rectangle(x as f32 * CELL_SIZE, y as f32 * CELL_SIZE, CELL_SIZE, CELL_SIZE, color);
+                if extra_rect != Direction::None {
+                    draw_line(CELL_SIZE * (x as f32 + 0.5), CELL_SIZE * (y as f32 + 0.5), 
+                    CELL_SIZE * (x as f32 + 0.5 * (1.0 + extra_rect.x_offset())), 
+                    CELL_SIZE * (y as f32 + 0.5 * (1.0 + extra_rect.y_offset())), 4.0, BLACK);
+                }
             }
         }
     }
