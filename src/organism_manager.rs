@@ -1,6 +1,8 @@
 use crate::grid::Grid;
 use crate::cell::{Cell};
 use crate::organism::Organism;
+use crate::utils::{HEIGHT, WIDTH};
+use rand::Rng;
 
 pub struct OrganismManager {
     pub organisms: Vec<Organism>,
@@ -17,14 +19,17 @@ impl OrganismManager {
         }
     }
 
-    fn default_org() -> Organism {
-        Organism::new(50, 50, vec![(-1, 0, Cell::Producer), (0, 0, Cell::Mouth), (1, 0, Cell::Mover)], 0)
+    fn default_org() -> Vec<(i32, i32, Cell)> {
+        vec![(-1, -1, Cell::Producer), (0, 0, Cell::Mouth), (1, 1, Cell::Producer)]
         //Organism::new(50, 50, vec![(0, -1, Cell::Mouth),(-1, 0, Cell::Producer), (0, 0, Cell::Mover), (1, 0, Cell::Producer),(-1, 1, Cell::Brain), (0, 1, Cell::Eye(EyeType::Down)), (1, 1, Cell::Brain),], 0)
     }
 
     pub fn init(&mut self) {
         self.grid.scatter_food();
-        self.organisms.push(OrganismManager::default_org());
+        let mut rng = rand::thread_rng();
+        for i in 0..10 {
+            self.organisms.push(Organism::new(rng.gen_range(10..WIDTH - 10), rng.gen_range(10..HEIGHT - 10), OrganismManager::default_org(), i));
+        }
     }
 
     pub fn assign_id(&self) -> usize {
@@ -62,7 +67,8 @@ impl OrganismManager {
         self.organisms.extend(new_organisms);
 
         if self.organisms.is_empty() {
-            self.organisms.push(OrganismManager::default_org());
+            self.grid.foods = [[false; WIDTH]; HEIGHT];
+            self.init();
         }
 
         self.frame += 1;

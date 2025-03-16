@@ -1,4 +1,3 @@
-use crate::cell::EyeType;
 use crate::organism::Organism;
 
 use crate::{Direction, cell::Cell};
@@ -83,6 +82,10 @@ impl Grid {
 
     pub fn make_remains(&mut self, organism: &Organism) {
         for (dx, dy, _) in organism.cells.iter() {
+            if self.rng.gen::<f32>() > DROP_FOOD_RATE {
+                continue;
+            }
+
             let x = organism.x as i32 + dx;
             let y = organism.y as i32 + dy;
             if x < 0 || y < 0 || x >= WIDTH as i32 || y >= HEIGHT as i32 {
