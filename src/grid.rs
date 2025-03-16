@@ -11,6 +11,8 @@ pub struct Grid {
     pub rng: ThreadRng,
     pub foods: [[bool; WIDTH]; HEIGHT],
     pub organs: [[Cell; WIDTH]; HEIGHT],
+    pending_kill_coordinates: Vec<(usize, usize)>, // x, y
+    pending_kill_killers: Vec<usize>, // id
 }
 
 impl Grid {
@@ -19,6 +21,18 @@ impl Grid {
             rng: thread_rng(),
             foods: [[false; WIDTH]; HEIGHT],
             organs: [[Cell::Empty; WIDTH]; HEIGHT],
+            pending_kill_coordinates: Vec::new(),
+            pending_kill_killers: Vec::new(),
+        }
+    }
+
+    pub fn scatter_food(&mut self) {
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                if self.rng.gen::<f32>() < 0.1 {
+                    self.foods[y][x] = true;
+                }
+            }
         }
     }
 
@@ -63,6 +77,11 @@ impl Grid {
         }
     }
 
+    pub fn killer_activates(&mut self, x: usize, y: usize, id: usize) {
+        self.pending_kill_coordinates.push((x, y));
+        self.pending_kill_killers.push(id);
+    }
+
     pub fn check_spawn(&self, organism: &Organism) -> bool {
         for (dx, dy, _) in organism.cells.iter() {
             let x = organism.x as i32 + dx;
@@ -105,13 +124,38 @@ impl Grid {
 
     pub fn draw_organisms(&mut self, organisms: &mut Vec<Organism>) {
         self.organs = [[Cell::Empty; WIDTH]; HEIGHT];
-        for organism in organisms.iter() {
+        for organism in organisms.iter_mut() {
             for cell in organism.cells.iter() {
                 let x = (organism.x as i32 + cell.0) as usize;
                 let y = (organism.y as i32 + cell.1) as usize;
+
+                if cell.2 != Cell::Armor {
+                    for (i, (kill_x, kill_y)) in self.pending_kill_coordinates.iter().enumerate() {
+                        if *kill_x <= 1 || *kill_y <= 1 {
+                            if (x == *kill_x + 1 && y == *kill_y ||
+                                x == *kill_x && y == *kill_y + 1) &&
+                                self.pending_kill_killers[i] != organism.id {
+                                organism.killed = true;
+                                continue;
+                            }
+                        } else {
+                            if (x == *kill_x + 1 && y == *kill_y ||
+                                x == *kill_x - 1 && y == *kill_y ||
+                                x == *kill_x && y == *kill_y + 1 ||
+                                x == *kill_x && y == *kill_y - 1) &&
+                                self.pending_kill_killers[i] != organism.id {
+                                organism.killed = true;
+                                continue;
+                            }
+                        } 
+                    }
+                }
+
                 self.organs[y][x] = cell.2;
             }
         }
+        self.pending_kill_coordinates.clear();
+        self.pending_kill_killers.clear();
         self.draw();
     }
 

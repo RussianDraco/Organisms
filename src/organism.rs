@@ -1,15 +1,18 @@
 use crate::{cell::Cell, grid};
+use std::collections::VecDeque;
 use rand::prelude::*;
-use crate::utils::{WIDTH, HEIGHT, DEFAULT_LIFETIME};
+use crate::utils::{WIDTH, HEIGHT, DEFAULT_LIFETIME, MUTATION_RATE};
 
 #[derive(PartialEq)]
 pub struct Organism {
     pub x: usize,
     pub y: usize,
     pub cells: Vec<(i32, i32, Cell)>,
+    pub id: usize,
     pub energy: i32,
+    pub lifetime: i32,
+    pub killed: bool,
 
-    lifetime: i32,
     min_x: usize,
     max_x: usize,
     min_y: usize,
@@ -17,7 +20,7 @@ pub struct Organism {
 }
 
 impl Organism {
-    pub fn new(x: usize, y: usize, cells: Vec<(i32, i32, Cell)>) -> Self {
+    pub fn new(x: usize, y: usize, cells: Vec<(i32, i32, Cell)>, id: usize) -> Self {
         let mut min_x = 0;
         let mut max_x = 0;
         let mut min_y = 0;
@@ -37,12 +40,102 @@ impl Organism {
             }
         }
 
-        Organism { x, y, cells, energy: 0, lifetime: DEFAULT_LIFETIME,
+        Organism { x, y, cells, id, energy: 0, lifetime: DEFAULT_LIFETIME, killed: false,
             min_x: min_x.abs() as usize, max_x: max_x as usize, min_y: min_y.abs() as usize, max_y: max_y as usize}
     }
-    pub fn child(&self) -> Self {
-        Organism { x: self.x, y: self.y, cells: self.cells.clone(), energy: 0, lifetime: DEFAULT_LIFETIME,
-            min_x: self.min_x, max_x: self.max_x, min_y: self.min_y, max_y: self.max_y}
+    fn is_connected(&self) -> bool {
+        if self.cells.is_empty() {
+            return false;
+        }
+
+        let mut visited = vec![false; self.cells.len()];
+        let mut queue = VecDeque::new();
+
+        queue.push_back(0);
+        visited[0] = true;
+        let mut visited_count = 1;
+
+        while let Some(index) = queue.pop_front() {
+            let (x1, y1, _) = self.cells[index];
+
+            for (i, (x2, y2, _)) in self.cells.iter().enumerate() {
+                if !visited[i] && ((x1 - x2).abs() + (y1 - y2).abs() == 1) {
+                    visited[i] = true;
+                    queue.push_back(i);
+                    visited_count += 1;
+                }
+            }
+        }
+
+        visited_count == self.cells.len()
+    }
+    pub fn child(&self, id: usize) -> Organism {
+        let mut child = Organism { x: self.x, y: self.y, id, cells: self.cells.clone(), energy: 0, lifetime: DEFAULT_LIFETIME, killed: false,
+            min_x: self.min_x, max_x: self.max_x, min_y: self.min_y, max_y: self.max_y};
+        
+        child.mutate();
+        child
+    }
+    pub fn mutate(&mut self) {
+        let mut rng = rand::thread_rng();
+        if rng.gen::<f32>() < MUTATION_RATE {
+            let val = rng.gen::<f32>();
+            if val < 0.33 {
+                self.add_cell(Cell::random_cell());
+            } else if val < 0.66 {
+                self.remove_cell();
+            } else {
+                self.change_cell();
+            }
+        }
+    }
+    pub fn add_cell(&mut self, new_cell: Cell) {
+        let mut rng = rand::thread_rng();
+        if self.cells.is_empty() {
+            return;
+        }
+
+        let &(base_x, base_y, _) = self.cells.choose(&mut rng).unwrap();
+
+        let possible_positions = vec![
+            (base_x + 1, base_y),
+            (base_x - 1, base_y),
+            (base_x, base_y + 1),
+            (base_x, base_y - 1),
+        ];
+
+        let valid_positions: Vec<_> = possible_positions
+            .into_iter()
+            .filter(|&(x, y)| !self.cells.iter().any(|(cx, cy, _)| *cx == x && *cy == y))
+            .collect();
+
+        if let Some(&(new_x, new_y)) = valid_positions.choose(&mut rng) {
+            self.cells.push((new_x, new_y, new_cell));
+        }
+    }
+    pub fn remove_cell(&mut self) {
+        let mut rng = rand::thread_rng();
+        if self.cells.len() <= 1 {
+            return; 
+        }
+
+        let original_cells = self.cells.clone();
+        let remove_index = rng.gen_range(0..self.cells.len());
+
+        self.cells.remove(remove_index);
+
+        if !self.is_connected() {
+            self.cells = original_cells;
+        }
+    }
+    pub fn change_cell(&mut self) {
+        let mut rng = rand::thread_rng();
+        if self.cells.is_empty() {
+            return;
+        }
+
+        let index = rng.gen_range(0..self.cells.len());
+        self.cells[index].2 = Cell::random_cell();
     }
 
     pub fn random_offset(&mut self) {
@@ -95,7 +188,8 @@ impl Organism {
     pub fn update(&mut self, grid: &mut grid::Grid) -> bool {
         self.lifetime -= 1;
         if self.lifetime <= 0 {
-            grid.make_remains(self);
+            //grid.make_remains(self);
+            self.killed = true;
             return false;
         }
 
@@ -116,11 +210,9 @@ impl Organism {
                     will_move = true;
                 }
                 Cell::Killer => {
-                    // Do something
+                    grid.killer_activates(x, y, self.id);
                 }
-                Cell::Armor => {
-                    // Do something
-                }
+                Cell::Armor => {}
                 Cell::Eye => {
                     // Do something
                 }
