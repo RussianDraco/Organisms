@@ -5,7 +5,7 @@ mod utils;
 mod organism_manager;
 mod brain;
 
-use ::rand::Rng;
+use ::rand::{Rng, rngs::StdRng};
 use grid::Grid;
 use organism_manager::OrganismManager;
 use macroquad::prelude::*;
@@ -19,8 +19,8 @@ pub enum Direction {
     None
 }
 impl Direction {
-    pub fn random_direction() -> Direction {
-        match ::rand::thread_rng().gen_range(0..=3) {
+    pub fn random_direction(rng: &mut StdRng) -> Direction {
+        match (*rng).gen_range(0..=3) {
             0 => Direction::Up,
             1 => Direction::Down,
             2 => Direction::Left,
@@ -67,7 +67,6 @@ async fn main() {
     loop {
         clear_background(BLACK);
 
-        organism_manager.draw_organisms();
         organism_manager.update();
 
         next_frame().await;

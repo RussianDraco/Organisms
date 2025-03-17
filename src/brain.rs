@@ -1,4 +1,4 @@
-use rand::prelude::*;
+use rand::{Rng, rngs::StdRng};
 use crate::utils::{MUTATION_RATE, HIDDEN_NEURON_NUM};
 use crate::Direction;
 
@@ -11,9 +11,7 @@ pub struct Brain {
 }
 
 impl Brain {
-    pub fn new(num_inputs: usize, num_hidden_layers: usize) -> Self {
-        let mut rng = rand::thread_rng();
-
+    pub fn new(num_inputs: usize, num_hidden_layers: usize, rng: &mut StdRng) -> Self {
         let mut weights = Vec::new();
 
         weights.push(
@@ -76,9 +74,7 @@ impl Brain {
         }
     }
 
-    pub fn mutate(&mut self, brain_num: usize) {
-        let mut rng = rand::thread_rng();
-        
+    pub fn mutate(&mut self, rng: &mut StdRng, brain_num: usize) {
         if rng.gen::<f32>() < MUTATION_RATE {
             for layer in self.weights.iter_mut() {
                 for neuron in layer.iter_mut() {
@@ -105,9 +101,9 @@ impl Brain {
         }
     }
 
-    pub fn child_brain(&self, brain_num: usize) -> Brain {
+    pub fn child_brain(&self, brain_num: usize, rng: &mut StdRng) -> Brain {
         let mut new_brain: Brain = self.clone();
-        new_brain.mutate(brain_num);
+        new_brain.mutate(rng, brain_num);
         new_brain
     }
 }

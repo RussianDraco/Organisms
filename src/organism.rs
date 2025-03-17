@@ -1,7 +1,7 @@
 use crate::{brain::Brain, cell::Cell, grid, utils::FOOD_BENEFIT, Direction};
 use std::collections::VecDeque;
-use rand::prelude::*;
-use crate::utils::{WIDTH, HEIGHT, LIFETIME_MULTIPLIER, MUTATION_RATE, HUNGER_RATE};
+use rand::{rngs::StdRng, Rng, seq::SliceRandom};
+use crate::utils::{WIDTH, HEIGHT, LIFETIME_MULTIPLIER, MUTATION_RATE, HUNGER_RATE, REPRODUCTION_ENEGRGY_MULTIPLER};
 
 pub struct Organism {
     pub x: usize,
@@ -23,7 +23,7 @@ pub struct Organism {
 }
 
 impl Organism {
-    pub fn new(x: usize, y: usize, cells: Vec<(i32, i32, Cell)>, id: usize) -> Self {
+    pub fn new(x: usize, y: usize, cells: Vec<(i32, i32, Cell)>, id: usize, rng: &mut StdRng) -> Self {
         let mut min_x = 0;
         let mut max_x = 0;
         let mut min_y = 0;
@@ -44,7 +44,7 @@ impl Organism {
         }
 
         let brain: Option<Brain> = if let Some((eye_num, brain_num)) = Organism::brain_quality(&cells) {
-            Some(Brain::new(eye_num, brain_num))
+            Some(Brain::new(eye_num, brain_num, rng))
         } else {
             None
         };
@@ -107,18 +107,18 @@ impl Organism {
 
         visited_count == self.cells.len()
     }
-    pub fn child(&self, id: usize) -> Organism {
+    pub fn child(&self, id: usize, rng: &mut StdRng) -> Organism {
         let lifetime = Organism::lifetime_len(&self.cells);
         let mut child = Organism { x: self.x, y: self.y, id, cells: self.cells.clone(), brain: None, energy: 0, lifetime, satiety: 1.0, killed: false,
             cells_len: self.cells_len, eye_data: Vec::new(), min_x: self.min_x, max_x: self.max_x, min_y: self.min_y, max_y: self.max_y};
         
-        child.mutate();
+        child.mutate(rng);
 
         let child_brain = if let Some((eye_num, brain_num)) = Organism::brain_quality(&child.cells) {
             if let Some(brain) = &self.brain {
-                Some(brain.child_brain(brain_num))
+                Some(brain.child_brain(brain_num, rng))
             } else {
-                Some(Brain::new(eye_num, brain_num))
+                Some(Brain::new(eye_num, brain_num, rng))
             }
         } else {
             None
@@ -128,30 +128,28 @@ impl Organism {
         
         child
     }
-    pub fn mutate(&mut self) {
-        let mut rng = rand::thread_rng();
+    pub fn mutate(&mut self, rng: &mut StdRng) {
         if rng.gen::<f32>() < MUTATION_RATE {
             let val = rng.gen::<f32>();
             if val < 0.33 {
-                self.change_cell();
+                self.change_cell(rng);
             } else if val < 0.66 && self.cells_len > 1 {
-                self.remove_cell();
+                self.remove_cell(rng);
                 self.lifetime -= LIFETIME_MULTIPLIER;
                 self.cells_len -= 1;
             } else {
-                self.add_cell(Cell::random_cell());
+                self.add_cell(Cell::random_cell(rng), rng);
                 self.lifetime += LIFETIME_MULTIPLIER;
                 self.cells_len += 1;
             }
         }
     }
-    pub fn add_cell(&mut self, new_cell: Cell) {
-        let mut rng = rand::thread_rng();
+    pub fn add_cell(&mut self, new_cell: Cell, rng: &mut StdRng) {
         if self.cells.is_empty() {
             return;
         }
 
-        let &(base_x, base_y, _) = self.cells.choose(&mut rng).unwrap();
+        let &(base_x, base_y, _) = self.cells.choose(rng).unwrap();
 
         let possible_positions = vec![
             (base_x + 1, base_y),
@@ -165,12 +163,11 @@ impl Organism {
             .filter(|&(x, y)| !self.cells.iter().any(|(cx, cy, _)| *cx == x && *cy == y))
             .collect();
 
-        if let Some(&(new_x, new_y)) = valid_positions.choose(&mut rng) {
+        if let Some(&(new_x, new_y)) = valid_positions.choose(rng) {
             self.cells.push((new_x, new_y, new_cell));
         }
     }
-    pub fn remove_cell(&mut self) {
-        let mut rng = rand::thread_rng();
+    pub fn remove_cell(&mut self, rng: &mut StdRng) {
         if self.cells_len <= 1 {
             return; 
         }
@@ -184,18 +181,41 @@ impl Organism {
             self.cells = original_cells;
         }
     }
-    pub fn change_cell(&mut self) {
-        let mut rng = rand::thread_rng();
+    pub fn change_cell(&mut self, rng: &mut StdRng) {
         if self.cells.is_empty() {
             return;
         }
 
         let index = rng.gen_range(0..self.cells_len);
-        self.cells[index].2 = Cell::random_cell();
+        self.cells[index].2 = Cell::random_cell(rng);
+    }
+    
+    pub fn decode_anatomy(encoded: &str) -> Vec<(i32, i32, Cell)> {
+        let mut cells = Vec::new();
+        let parts: Vec<&str> = encoded.split(',').collect();
+
+        let mut i = 0;
+        while i + 2 < parts.len() {
+            if let (Ok(dx), Ok(dy)) = (parts[i].parse::<i32>(), parts[i + 1].parse::<i32>()) {
+                if let Some(cell) = Cell::from_string(parts[i + 2]) { // Ensure `Cell::from_string()` exists
+                    cells.push((dx, dy, cell));
+                }
+            }
+            i += 3;
+        }
+
+        cells
+    }
+    pub fn encode_anatomy(&self) -> String {
+        let mut anatomy = String::new();
+        for (dx, dy, cell) in &self.cells {
+            anatomy.push_str(&format!("{},{},", dx, dy));
+            anatomy.push_str(&format!("{:?},", cell));
+        }
+        anatomy
     }
 
-    pub fn random_offset(&mut self) {
-        let mut rng = rand::thread_rng();
+    pub fn random_offset(&mut self, rng: &mut StdRng) {
         let rang_tup = self.body_range();
         let x_range = (4 + rang_tup.0) as i32;
         let y_range = (4 + rang_tup.1) as i32;
@@ -282,24 +302,23 @@ impl Organism {
         self.x = new_x;
         self.y = new_y;
     }
-    pub fn random_movement(&mut self, grid: &grid::Grid) {
-        let mut rng = rand::thread_rng();
+    pub fn random_movement(&mut self, grid: &grid::Grid, rng: &mut StdRng) {
         if rng.gen::<f32>() < 0.5 {
             self.rotate(rng.gen::<bool>(), grid);
             return;
         } else {
-            let dir = Direction::random_direction();
+            let dir = Direction::random_direction(rng);
             self.move_dir(dir, grid);
         }
     }
     pub fn can_reproduce(&self) -> bool {
-        self.energy >= self.cells_len as i32
+        self.energy as f32 >= self.cells_len as f32 * REPRODUCTION_ENEGRGY_MULTIPLER
     }
     pub fn consume_reproduction_energy(&mut self) {
         self.energy -= self.cells_len as i32;
     }
 
-    pub fn update(&mut self, grid: &mut grid::Grid) -> bool {
+    pub fn update(&mut self, grid: &mut grid::Grid, rng: &mut StdRng) -> bool {
         self.lifetime -= 1;
         self.satiety -= HUNGER_RATE * self.cells_len as f32;
         if self.lifetime <= 0 {
@@ -342,13 +361,12 @@ impl Organism {
             }
         }
 
-        let mut dir = Direction::None;
         if will_move {
             if let Some(ref mut brain) = self.brain {
-                dir = brain.process_input(self.eye_data.clone());
+                let dir = brain.process_input(self.eye_data.clone());
                 self.move_dir(dir, grid);
             } else {
-                self.random_movement(grid);
+                self.random_movement(grid, rng);
             }
         }
         

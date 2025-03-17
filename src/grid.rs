@@ -1,8 +1,9 @@
 use crate::organism::Organism;
 
-use crate::{Direction, cell::Cell};
+use crate::{Direction, cell::Cell, organism_manager::SimData};
 use macroquad::prelude::*;
-use ::rand::prelude::*;
+use ::rand::{SeedableRng, Rng};
+use ::rand::rngs::StdRng;
 
 use crate::utils::*;//{WIDTH, HEIGHT, CELL_SIZE, PRODUCER_RATE}; 
 
@@ -13,7 +14,7 @@ enum CellContent {
 }
 
 pub struct Grid {
-    pub rng: ThreadRng,
+    pub rng: StdRng,
     pub foods: [[bool; WIDTH]; HEIGHT],
     pub organs: [[Cell; WIDTH]; HEIGHT],
     pending_kill_coordinates: Vec<(usize, usize)>, // x, y
@@ -23,7 +24,7 @@ pub struct Grid {
 impl Grid {
     pub fn new() -> Self {
         Grid {
-            rng: thread_rng(),
+            rng: StdRng::seed_from_u64(SEED+1),
             foods: [[false; WIDTH]; HEIGHT],
             organs: [[Cell::Empty; WIDTH]; HEIGHT],
             pending_kill_coordinates: Vec::new(),
@@ -185,10 +186,10 @@ impl Grid {
     }
 
     pub fn screen_size() -> (i32, i32) {
-        ((WIDTH as f32 * CELL_SIZE) as i32, (HEIGHT as f32 * CELL_SIZE) as i32)
+        ((WIDTH as f32 * CELL_SIZE + MENU_WIDTH) as i32, (HEIGHT as f32 * CELL_SIZE) as i32)
     }
 
-    pub fn draw_organisms(&mut self, organisms: &mut Vec<Organism>) {
+    pub fn update(&mut self, organisms: &mut Vec<Organism>) {
         self.organs = [[Cell::Empty; WIDTH]; HEIGHT];
         for organism in organisms.iter_mut() {
             for cell in organism.cells.iter() {
@@ -222,7 +223,63 @@ impl Grid {
         }
         self.pending_kill_coordinates.clear();
         self.pending_kill_killers.clear();
-        self.draw();
+        if crate::utils::GRAPHICS {self.draw();}
+    }
+
+    fn get_cell_color(cell: &Cell) -> Color {
+        match cell {
+            Cell::Empty => DARKGRAY,
+            Cell::Body => WHITE,
+            Cell::Mouth => ORANGE,
+            Cell::Producer => GREEN,
+            Cell::Mover => LIGHTGRAY,
+            Cell::Killer => RED,
+            Cell::Armor => YELLOW,
+            Cell::Eye(_) => PURPLE,
+            Cell::Brain => PINK,
+            //_ => DARKGRAY,
+        }
+    }
+
+    pub fn update_sim_menu(&self, sim_data: &SimData) {
+        draw_rectangle(WIDTH as f32 * CELL_SIZE, 0.0, MENU_WIDTH, MENU_HEIGHT, LIGHTGRAY);
+        draw_rectangle(WIDTH as f32 * CELL_SIZE + CELL_SIZE, CELL_SIZE, MENU_WIDTH - 2.0 * CELL_SIZE, MENU_WIDTH - 2.0 * CELL_SIZE, WHITE);
+        self.draw_success(sim_data.best_species.as_str());
+
+        let mut text = format!("Organism #: {}", sim_data.organism_num);
+        draw_text(&text, WIDTH as f32 * CELL_SIZE + CELL_SIZE * 2.0, MENU_HEIGHT / 1.75, 20.0, BLACK);
+        text = format!("Hunger Deaths: {}", sim_data.hunger_death);
+        draw_text(&text, WIDTH as f32 * CELL_SIZE + CELL_SIZE * 2.0, MENU_HEIGHT / 1.75 + 25.0, 20.0, BLACK);
+        text = format!("Age Deaths: {}", sim_data.age_death);
+        draw_text(&text, WIDTH as f32 * CELL_SIZE + CELL_SIZE * 2.0, MENU_HEIGHT / 1.75 + 50.0, 20.0, BLACK);
+    }
+
+    fn draw_success(&self, success_org: &str) {
+        let decoded_cells = Organism::decode_anatomy(success_org);
+        if decoded_cells.is_empty() {
+            return;
+        }
+
+        let min_x = decoded_cells.iter().map(|(x, _, _)| *x).min().unwrap_or(0);
+        let max_x = decoded_cells.iter().map(|(x, _, _)| *x).max().unwrap_or(0);
+        let min_y = decoded_cells.iter().map(|(_, y, _)| *y).min().unwrap_or(0);
+        let max_y = decoded_cells.iter().map(|(_, y, _)| *y).max().unwrap_or(0);
+
+        let organism_width = (max_x - min_x + 1) as f32 * CELL_SIZE;
+        let organism_height = (max_y - min_y + 1) as f32 * CELL_SIZE;
+
+        let center_x = WIDTH as f32 * CELL_SIZE + MENU_WIDTH / 2.0;
+        let center_y = MENU_WIDTH / 2.0;
+
+        let start_x = center_x - organism_width / 2.0;
+        let start_y = center_y - organism_height / 2.0;
+
+        for (dx, dy, cell) in decoded_cells.iter() {
+            let x = start_x + (*dx - min_x) as f32 * CELL_SIZE;
+            let y = start_y + (*dy - min_y) as f32 * CELL_SIZE;
+
+            draw_rectangle(x, y, CELL_SIZE, CELL_SIZE, Grid::get_cell_color(cell));
+        }
     }
 
     pub fn draw(&self) {
