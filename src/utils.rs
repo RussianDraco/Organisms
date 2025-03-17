@@ -1,3 +1,6 @@
+#[cfg(feature = "tuning")]
+pub use crate::tuner::Constants; // Use tuner constants if tuning is enabled
+
 pub const WIDTH: usize = 140;
 pub const HEIGHT: usize = 90;
 pub const CELL_SIZE: f32 = 10.0;

@@ -4,11 +4,18 @@ mod organism;
 mod utils;
 mod organism_manager;
 mod brain;
+#[cfg(feature = "tuning")]
+mod tuner;
 
 use ::rand::{Rng, rngs::StdRng};
 use grid::Grid;
 use organism_manager::OrganismManager;
 use macroquad::prelude::*;
+
+#[cfg(feature = "tuning")]
+const TUNING: bool = true;
+#[cfg(not(feature = "tuning"))]
+const TUNING: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
@@ -60,6 +67,12 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    if TUNING {
+        #[cfg(feature = "tuning")]
+        tuner::main();
+        return;
+    }
+
     let mut organism_manager = OrganismManager::new();
 
     organism_manager.init();

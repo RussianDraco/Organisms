@@ -19,6 +19,7 @@ pub struct Grid {
     pub organs: [[Cell; WIDTH]; HEIGHT],
     pending_kill_coordinates: Vec<(usize, usize)>, // x, y
     pending_kill_killers: Vec<usize>, // id
+    graphics_on: bool,
 }
 
 impl Grid {
@@ -29,6 +30,7 @@ impl Grid {
             organs: [[Cell::Empty; WIDTH]; HEIGHT],
             pending_kill_coordinates: Vec::new(),
             pending_kill_killers: Vec::new(),
+            graphics_on: true,
         }
     }
 
@@ -241,7 +243,7 @@ impl Grid {
         }
     }
 
-    pub fn update_sim_menu(&self, sim_data: &SimData) {
+    pub fn update_sim_menu(&mut self, sim_data: &SimData) {
         draw_rectangle(WIDTH as f32 * CELL_SIZE, 0.0, MENU_WIDTH, MENU_HEIGHT, LIGHTGRAY);
         draw_rectangle(WIDTH as f32 * CELL_SIZE + CELL_SIZE, CELL_SIZE, MENU_WIDTH - 2.0 * CELL_SIZE, MENU_WIDTH - 2.0 * CELL_SIZE, WHITE);
         self.draw_success(sim_data.best_species.as_str());
@@ -252,6 +254,20 @@ impl Grid {
         draw_text(&text, WIDTH as f32 * CELL_SIZE + CELL_SIZE * 2.0, MENU_HEIGHT / 1.75 + 25.0, 20.0, BLACK);
         text = format!("Age Deaths: {}", sim_data.age_death);
         draw_text(&text, WIDTH as f32 * CELL_SIZE + CELL_SIZE * 2.0, MENU_HEIGHT / 1.75 + 50.0, 20.0, BLACK);
+
+        let button_x = WIDTH as f32 * CELL_SIZE + CELL_SIZE * 2.0;
+        let button_y = MENU_HEIGHT / 1.5 + 75.0;
+        let button_width = if self.graphics_on {190.0} else {200.0};
+        let button_height = 30.0;
+        draw_rectangle(button_x, button_y, button_width, button_height, GRAY);
+        draw_text(&format!("Toggle Graphics: {}", self.graphics_on), button_x + 5.0, button_y + 20.0, 20.0, BLACK);
+
+        if is_mouse_button_pressed(MouseButton::Left) {
+            let (mouse_x, mouse_y) = mouse_position();
+            if mouse_x >= button_x && mouse_x <= button_x + button_width && mouse_y >= button_y && mouse_y <= button_y + button_height {
+                self.graphics_on = !self.graphics_on;
+            }
+        }
     }
 
     fn draw_success(&self, success_org: &str) {
@@ -283,6 +299,7 @@ impl Grid {
     }
 
     pub fn draw(&self) {
+        if !self.graphics_on {return;}
         for y in 0..HEIGHT {
             for x in 0..WIDTH {
                 let mut extra_rect: Direction = Direction::None;
